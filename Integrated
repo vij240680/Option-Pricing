@@ -1,0 +1,48 @@
+import numpy as np
+import pandas as pd
+from scipy.stats import norm
+
+def binomial_option_pricing(S, K, T, r, sigma, N, option_type='call'):
+    dt = T / N
+    u = np.exp(sigma * np.sqrt(dt))
+    d = 1 / u
+    q = (np.exp(r * dt) - d) / (u - d)
+    asset_prices = S * u**np.arange(N, -1, -1) * d**np.arange(0, N+1)
+    if option_type == 'call':
+        option_prices = np.maximum(0, asset_prices - K)
+    elif option_type == 'put':
+        option_prices = np.maximum(0, K - asset_prices)
+    else:
+        raise ValueError("Option type must be 'call' or 'put'")
+    for j in range(N-1, -1, -1):
+        option_prices = np.exp(-r * dt) * (q * option_prices[:-1] + (1 - q) * option_prices[1:])
+        if option_type == 'call':
+            option_prices = np.maximum(option_prices, asset_prices[:j+1] - K)
+        elif option_type == 'put':
+            option_prices = np.maximum(option_prices, K - asset_prices[:j+1])
+    return option_prices[0]
+
+def black_scholes(S, K, T, r, sigma, option_type='call'):
+    d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+    d2 = d1 - sigma * np.sqrt(T)
+    if option_type == 'call':
+        price = (S * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2))
+    elif option_type == 'put':
+        price = (K * np.exp(-r * T) * norm.cdf(-d2) - S * norm.cdf(-d1))
+    else:
+        raise ValueError("Option type must be 'call' or 'put'")
+    return price
+
+
+options_df = pd.read_csv(r'C:\Input\\OptionPricing_Integrated.csv')
+options_df['price'] = options_df.apply(
+    lambda row: (
+        black_scholes(row['S'], row['K'], row['T'], row['r'], row['sigma'], row['option_type']) 
+        if row['style'] == 'European' 
+        else binomial_option_pricing(row['S'], row['K'], row['T'], row['r'], row['sigma'], row['N'], row['option_type'])
+    ),
+    axis=1
+)
+
+# Display the results
+print(options_df[['S', 'K', 'T', 'r', 'sigma', 'N', 'option_type', 'style', 'price']])
